@@ -1,3 +1,4 @@
+import api from "../api";
 import { useState, useRef } from "react";
 import api from "../services/api";
 import ResultTable from "./ResultTable";
