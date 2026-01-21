@@ -5,6 +5,17 @@ import numpy as np
 import os
 import re
 from werkzeug.utils import secure_filename
+import smtplib
+from email.message import EmailMessage
+from dotenv import load_dotenv
+
+# ================= LOAD ENV =================
+load_dotenv()
+
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+
+EMAIL_REGEX = r"^[\w\.-]+@[\w\.-]+\.\w+$"
 
 # ================= APP INIT =================
 app = Flask(__name__)
@@ -15,8 +26,6 @@ OUTPUT_DIR = "outputs"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-EMAIL_REGEX = r"^[\w\.-]+@[\w\.-]+\.\w+$"
 
 # ================= HEALTH CHECK =================
 @app.route("/")
@@ -51,15 +60,44 @@ def run_topsis(df, weights, impacts):
 
     return df
 
+# ================= EMAIL FUNCTION =================
+def send_email(receiver_email, file_path):
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        raise Exception("Email credentials not configured")
+
+    msg = EmailMessage()
+    msg["From"] = GMAIL_USER
+    msg["To"] = receiver_email
+    msg["Subject"] = "TOPSIS Result"
+    msg.set_content("Attached is your TOPSIS result file.")
+
+    with open(file_path, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="text",
+            subtype="csv",
+            filename="topsis_result.csv"
+        )
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        server.send_message(msg)
+
 # ================= API =================
 @app.route("/api/topsis", methods=["POST"])
 def topsis_api():
     file = request.files.get("file")
     weights = request.form.get("weights")
     impacts = request.form.get("impacts")
+    email = request.form.get("email")
+    send_mail = request.form.get("send_mail") == "true"
 
     if not file:
         return jsonify({"error": "CSV file required"}), 400
+
+    if send_mail:
+        if not email or not re.match(EMAIL_REGEX, email):
+            return jsonify({"error": "Invalid email address"}), 400
 
     try:
         weights = list(map(float, weights.split(",")))
@@ -84,9 +122,21 @@ def topsis_api():
     output_path = os.path.join(OUTPUT_DIR, output_filename)
     result_df.to_csv(output_path, index=False)
 
+    email_sent = False
+    email_error = None
+
+    if send_mail:
+        try:
+            send_email(email, output_path)
+            email_sent = True
+        except Exception as e:
+            email_error = "Email sending failed"
+
     return jsonify({
         "table": result_df.to_dict(orient="records"),
-        "download": f"/api/download/{output_filename}"
+        "download": f"/api/download/{output_filename}",
+        "emailSent": email_sent,
+        "emailError": email_error
     })
 
 # ================= DOWNLOAD =================
