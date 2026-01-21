@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import api from "../api";
+import api from "../services/api";
 import ResultTable from "./ResultTable";
 
 export default function TopsisForm() {
@@ -7,6 +7,9 @@ export default function TopsisForm() {
 
   const [weights, setWeights] = useState("");
   const [impacts, setImpacts] = useState("");
+  const [email, setEmail] = useState("");
+  const [sendMail, setSendMail] = useState(false);
+
   const [result, setResult] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,6 +21,7 @@ export default function TopsisForm() {
     setLoading(true);
 
     const formData = new FormData(e.target);
+    formData.append("send_mail", sendMail);
 
     try {
       const res = await api.post("/api/topsis", formData);
@@ -33,6 +37,8 @@ export default function TopsisForm() {
     formRef.current.reset();
     setWeights("");
     setImpacts("");
+    setEmail("");
+    setSendMail(false);
     setResult([]);
     setError("");
   };
@@ -71,12 +77,41 @@ export default function TopsisForm() {
           />
         </div>
 
+        {/* EMAIL OPTION */}
+        <div className="form-check mb-3">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            id="sendMail"
+            checked={sendMail}
+            onChange={(e) => setSendMail(e.target.checked)}
+          />
+          <label className="form-check-label" htmlFor="sendMail">
+            Send result to email
+          </label>
+        </div>
+
+        {sendMail && (
+          <div className="mb-3">
+            <input
+              type="email"
+              name="email"
+              className="form-control"
+              placeholder="Enter email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+        )}
+
         {error && <div className="alert alert-danger">{error}</div>}
 
         <div className="d-grid gap-2">
           <button className="btn btn-primary" disabled={loading}>
             {loading ? "Processing..." : "Calculate TOPSIS"}
           </button>
+
           <button
             type="button"
             className="btn btn-outline-secondary"
